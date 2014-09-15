@@ -1,0 +1,26 @@
+{
+  "name": "fd-jsutils",
+  "version": "0.1.0",
+  "authors": [
+    "Konrad Mohrfeldt <konrad.mohrfeldt@farbdev.org>"
+  ],
+  "description": "common framework-less utils",
+  "keywords": [
+    "frontend",
+    "utils",
+    "farbdev"
+  ],
+  "license": "MIT",
+  "homepage": "https://projects.farbdev.org/farbdev/jsutils",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jquery": "~1.11",
+    "handlebars": "~1.3.0"
+  }
+}
