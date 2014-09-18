@@ -1,19 +1,53 @@
 (function(ns, $) {
-    var EntityRepository = function(entities, urlGenerator) {
-        this.initialize(entities || {}, urlGenerator || null);
+    "use strict";
+
+    var has = Object.prototype.hasOwnProperty;
+
+    var CriteriaMatcher = function(matchType, sourceProperty, matchAgainst) {
+        this.sourceProperty = sourceProperty;
+
+        this.matcher = {
+            like: function(source) {
+                return source.toLowerCase().indexOf(matchAgainst.toLowerCase()) !== -1;
+            },
+            eq: function(source) {
+                return source == matchAgainst;
+            },
+            lazyEqual: function(source) {
+                return source === matchAgainst;
+            }
+        }[matchType];
+    };
+
+    CriteriaMatcher.prototype = {
+        getSourceProperty: function() {
+            return this.sourceProperty;
+        },
+        match: function(source) {
+            return this.matcher(source);
+        }
+    };
+
+    CriteriaMatcher.type = {
+        lazyEqual: "leq",
+        equal: "eq",
+        like: "like"
+    };
+
+    var SimpleEntityRepository = function(entities) {
+        this.initialize(entities || {});
 
         this.dispatchEvent = function(event) {
             $(this).trigger(event, [].slice.call(arguments, 1));
         };
     };
 
-    EntityRepository.prototype = {
+    SimpleEntityRepository.prototype = {
         on: function(event, listener) {
             $(this).on(event, listener);
             return this;
         },
-        initialize: function(entities, urlGenerator) {
-            this.urlGenerator = urlGenerator;
+        initialize: function(entities) {
             this.entities = entities instanceof Array ?
                 (function(items) {
                     var entities = {};
@@ -27,15 +61,89 @@
                 : entities
             ;
         },
-        find: function(id) {
-            id = parseInt(id);
+        count: function() {
+            var count = 0;
+            
+            for(var id in this.entities) {
+                if(has.call(this.entities, id)) count++;
+            }
+            
+            return count;
+        },
+        findAll: function(limit) {
+            var entities = [];
+            var count = 0;
 
-            if(this.entities.hasOwnProperty(id)) {
+            for(var id in this.entities) {
+                if(has.call(this.entities, id)) {
+                    count++;
+                    entities.push(this.entities[id]);
+                    if(limit && count === limit) break;
+                }
+            }
+
+            return entities;
+        },
+        find: function(id) {
+            id = parseInt(id, 10);
+
+            if(this.has(id)) {
                 return this.entities[id];
             } else {
                 throw "entity with id " + id + " not found";
             }
         },
+        filter: function(criteria) {
+            var result = [];
+            var criteriaSources = [];
+            var numberOfCriteria = criteria.length;
+
+            for(var i = 0; i < numberOfCriteria; i++) {
+                criteriaSources.push(criteria[i].getSourceProperty());
+            }
+
+            for(var id in this.entities) {
+                if(has.call(this.entities, id)) {
+                    var entity = this.entities[id];
+                    var take = true;
+
+                    for(var i = 0; i < numberOfCriteria; i++) {
+                        if(!criteria[i].match(entity[criteriaSources[i]])) {
+                            take = false;
+                            break;
+                        }
+                    }
+                    
+                    if(take) {
+                        result.push(entity);
+                    }
+                }
+            }
+            
+            return result;
+        },
+        has: function(id) {
+            return has.call(this.entities, id);
+        },
+        add: function(item) {
+            this.entities[parseInt(item.id, 10)] = item;
+            return this;
+        },
+        remove: function(id) {
+            var item = this.find(id);
+            delete this.entities[item.id];
+            return this;
+        }
+    };
+
+    var RemoteEntityRepository = function(entities, urlGenerator) {
+        SimpleEntityRepository.call(this, urlGenerator);
+        this.urlGenerator = urlGenerator;
+    };
+
+    RemoteEntityRepository.prototype = SimpleEntityRepository.prototype;
+
+    RemoteEntityRepository.prototype = {
         remove: function(id, onRemoved) {
             var entity = this.find(id);
             var _self = this;
@@ -48,7 +156,7 @@
                 type: "DELETE"
             })
                 .done(function() {
-                    delete _self.entities[entity.id];
+                    SimpleEntityRepository.call(this, id);
                     onRemoved(true);
                     _self.dispatchEvent("entity:remove:success", entity);
                 })
@@ -115,5 +223,7 @@
         }
     };
 
-    ns.EntityRepository = EntityRepository;
+    ns.SimpleEntityRepository = SimpleEntityRepository;
+    ns.RemoteEntityRepository = RemoteEntityRepository;
+    ns.CriteriaMatcher = CriteriaMatcher;
 })(org.farbdev.entity.repository, jQuery);
